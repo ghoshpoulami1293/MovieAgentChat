@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--Set up the HTML document with embedded CSS styling -->
+<head>
+    <meta charset="UTF-8">
+    <title>Movie Agent Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        #messages {
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            padding: 15px;
+            height: 70vh;
+            overflow-y: auto;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        #inputArea {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+        }
+  
+        #query { width: 70%; padding: 8px; }
+        #sendBtn { padding: 8px 12px; }
+    </style>
+</head>
+
+
+<!-- Build the chat interface -->
+<body>
+
+<h1>🎬 Movie Agent Chat</h1>
+
+<!-- conversation history -->
+<div id="messages"></div>
+
+<!-- input box + send button-->
+<div id="inputArea">
+    <input type="text" id="query" placeholder="Ask something about movies..." />
+    <button id="sendBtn">Send</button> 
+</div>
+
+<script>
+    const queryInput = document.getElementById('query');
+    const sendBtn = document.getElementById('sendBtn');
+    const messagesDiv = document.getElementById('messages');
+
+    let thinkingDiv = null;
+
+    sendBtn.addEventListener('click', () => {
+        const query = queryInput.value.trim();
+        if (!query) return;
+
+        // Display user message
+        messagesDiv.innerHTML += `<div class="user"><strong>You:</strong> ${query}</div>`;
+        thinkingDiv = document.createElement('div');
+        thinkingDiv.className = 'thinking';
+        thinkingDiv.textContent = 'Agent is thinking...';
+        messagesDiv.appendChild(thinkingDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+        //messagesDiv.innerHTML += `<div><strong>You:</strong> ${query}</div>`;
+        //messagesDiv.innerHTML += `<div><em>Agent is thinking...</em></div>`;
+        //messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+        // Connect to SSE stream
+        //const eventSource = new EventSource(`/stream?query=${encodeURIComponent(query)}`);
+        const eventSource = new EventSource('http://localhost:8080/stream?query=' + encodeURIComponent(query));
+        isFirstAgentLine = true;  // reset flag for the message
+
+        eventSource.onmessage = function(event) {
+            if (event.data === "Done") {
+                eventSource.close();
+                thinkingDiv = null;
+            } else {
+                // Remove "Agent is thinking..." once answer starts coming
+                if (thinkingDiv) {
+                    thinkingDiv.remove();
+                    thinkingDiv = null;
+                }
+                // Append agent response line (no 'Agent:' prefix)
+                //messagesDiv.innerHTML += `<div><strong>Agent:</strong> ${event.data}</div>`;
+
+                //messagesDiv.innerHTML += `<div class="agent">${event.data}</div>`;
+
+                const agentMsg = document.createElement('div');
+                agentMsg.className = 'agent';
+                if (isFirstAgentLine) {
+                    agentMsg.innerHTML = `<strong>Agent:</strong> ${event.data}`;
+                    isFirstAgentLine = false;
+                } else {
+                    agentMsg.textContent = event.data;
+                }
+                messagesDiv.appendChild(agentMsg);
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        };
+
+        eventSource.onerror = function() {
+            console.warn('SSE connection issue (auto-retrying or done).');
+            //messagesDiv.innerHTML += `<div style="color:red;"><strong>Error:</strong> Connection lost.</div>`;
+            eventSource.close();
+            if (thinkingDiv) {
+                thinkingDiv.remove();
+                thinkingDiv = null;
+            }
+        };
+        // Clear input
+        queryInput.value = '';
+    });
+    // Optional: allow Enter key to send
+    queryInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendBtn.click();
+        }
+    });
+    // body { font-family: Arial, sans-serif; margin: 40px; }
+    // #messages { border: 1px solid #ccc; padding: 10px; height: 300px; overflow-y: scroll; }
+    // #inputArea { margin-top: 20px; }
+</script>
+
+</body>
+</html>
